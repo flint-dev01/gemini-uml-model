@@ -4,6 +4,7 @@ import base64
 import re
 import uuid
 import os
+
 from fastapi import Response
 from langchain_core.prompts import ChatPromptTemplate
 from app.schemas.uml_schema import UsecaseCreate, SequenceCreate ,ActivityCreate
@@ -39,11 +40,11 @@ def extract_plantuml_code(text: str):
     return match.group(0) if match else None
 
 async def CreateUseCase(text: UsecaseCreate):
-    model = InitializeModel()
+    chat1, chat2 = InitializeModel()
     plantuml_web_server =  InitializePlantUmlServer()
     human = usecase_human(text.srs_text)
     usecase_prompt = ChatPromptTemplate.from_messages([("system", usecase_system), ("human", human)])
-    usecase_chain = usecase_prompt | model    
+    usecase_chain = usecase_prompt | chat1    
     usecase_result = await asyncio.to_thread(usecase_chain.invoke, {}) 
     structured_text = extract_plantuml_code(usecase_result.content)
     if not structured_text:
@@ -78,73 +79,91 @@ async def CreateUseCase(text: UsecaseCreate):
     return response_data
 
 
-async def CreateSequence(data: SequenceCreate):
-    model = InitializeModel()
+async def process_seuence(use_case, chat, plantuml_web_server, data):
+    try:
+        # Generate prompt
+        system_msg = sequence_system(use_case)
+        human_msg = sequence_human(use_case, data.srs_text, data.usecase_code)
+        sequence_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
+
+        # Invoke chat asynchronously
+        sequence_chain = sequence_prompt | chat
+        sequence_result = await sequence_chain.ainvoke({})  # Ensure awaiting the coroutine
+        
+        seq_code = extract_plantuml_code(sequence_result.content)
+
+        # Validate and process UML code
+        if not seq_code or not seq_code.strip().startswith("@startuml") or not seq_code.strip().endswith("@enduml"):
+            print(f"Invalid PlantUML code for {use_case}. Skipping...")
+            return None
+        
+        label = re.sub(r"[^\w\-_.]", "_", use_case.replace(" ", "_"))
+        print(f"Processing diagram: {label}")
+
+        # Generate image
+        image_bytes = plantuml_web_server.processes(seq_code)
+        encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+
+        # Store results
+        return {"label": label, "image": encoded_image}
+
+    except Exception as e:
+        print(f"Error processing {use_case}: {e}")
+        return None
+
+async def process_activity(actor, chat, plantuml_web_server, data):
+    try:
+        system_msg = activity_system(actor)
+        human_msg = activity_human(actor, data.srs_text, data.usecase_code)
+        activity_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
+
+        # Invoke chat1
+        activity_chain = activity_prompt | chat
+        activity_result = await activity_chain.ainvoke({})
+        act_code = extract_plantuml_code(activity_result.content)
+        # Validate and process UML code
+        if not act_code.strip().startswith("@startuml") or not act_code.strip().endswith("@enduml"):
+            print(f"Invalid PlantUML code for {actor}. Skipping...")
+            return None
+
+        # Generate image
+        image_bytes = plantuml_web_server.processes(act_code)
+        encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+        # Store results
+        return ({"label": actor, "image": encoded_image})
+
+    except Exception as e:
+        print(f"Error processing {actor}: {e}")
+        return None
+
+async def CreateSequence(data):
+    chat1, chat2 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
-    sequence_image_data = []
 
-    for use_case in data.use_cases:
-        try:
-            # Generate prompt
-            system_msg = sequence_system(use_case)
-            human_msg = sequence_human(use_case, data.srs_text, data.usecase_code)
-            sequence_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
+    tasks = []
+    for idx, use_case in enumerate(data.use_cases):
+        chat = chat1 if idx % 2 == 0 else chat2 
+        tasks.append(process_seuence(use_case, chat, plantuml_web_server, data))
 
-            # Invoke model
-            sequence_chain = sequence_prompt | model
-            sequence_result = sequence_chain.invoke({})
-            seq_code = extract_plantuml_code(sequence_result.content)
+    # Run all tasks concurrently
+    results = await asyncio.gather(*tasks)
 
-            # Validate and process UML code
-            if not seq_code or not seq_code.strip().startswith("@startuml") or not seq_code.strip().endswith("@enduml"):
-                print(f"Invalid PlantUML code for {use_case}. Skipping...")
-                continue
-            
-            label = re.sub(r"[^\w\-_.]", "_", use_case.replace(" ", "_"))
-            print(f"Processing diagram: {label}")
-            # Generate image
-            image_bytes = plantuml_web_server.processes(seq_code)
-            encoded_image = base64.b64encode(image_bytes).decode("utf-8")
-
-            # Store results
-            sequence_image_data.append({"label": label, "image": encoded_image})
-
-        except Exception as e:
-            print(f"Error processing {use_case}: {e}")
+    # Filter out None values (failed cases)
+    sequence_image_data = [result for result in results if result is not None]
 
     return sequence_image_data
 
 
 async def CreateActivity(data: ActivityCreate):
-    model = InitializeModel()
+    chat1, chat2 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
     activity_image_data = [] 
-    for actor in data.actors:
-        try:
-            # Generate prompt
-            system_msg = activity_system(actor)
-            human_msg = activity_human(actor, data.srs_text, data.usecase_code)
-            activity_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
+    tasks = []
+    for idx, actor in enumerate(data.actors):
+        chat = chat1 if idx % 2 == 0 else chat2 
+        tasks.append(process_activity(actor, chat, plantuml_web_server, data))
+    results = await asyncio.gather(*tasks)
 
-            # Invoke model
-            activity_chain = activity_prompt | model
-            activity_result = activity_chain.invoke({})
-            act_code = extract_plantuml_code(activity_result.content)
-            # Validate and process UML code
-            if not act_code.strip().startswith("@startuml") or not act_code.strip().endswith("@enduml"):
-                print(f"Invalid PlantUML code for {actor}. Skipping...")
-                continue
-            
-           
-
-            # Generate image
-            image_bytes = plantuml_web_server.processes(act_code)
-            encoded_image = base64.b64encode(image_bytes).decode("utf-8")
-
-            # Store results
-            activity_image_data.append({"label": actor, "image": encoded_image})
-
-        except Exception as e:
-            print(f"Error processing {actor}: {e}")
+    activity_image_data = [result for result in results if result is not None]
 
     return activity_image_data
