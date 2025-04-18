@@ -39,6 +39,7 @@ def extract_plantuml_code(text: str):
     match = re.search(pattern, text, re.DOTALL)
     return match.group(0) if match else None
 
+
 async def CreateUseCase(text: UsecaseCreate):
     chat1, chat2 = InitializeModel()
     plantuml_web_server =  InitializePlantUmlServer()
@@ -53,7 +54,8 @@ async def CreateUseCase(text: UsecaseCreate):
         image_bytes = await asyncio.to_thread(plantuml_web_server.processes, structured_text)
     except Exception:
         return Response(content="Failed to extract PlantUML code", media_type="text/plain")
-    
+
+
     usecase_code = structured_text.replace("{\n", "{{\n").replace("\n}", "\n}}")
     use_cases = re.findall(r'usecase "([^"]+)"', structured_text)
     if "Login/Signup" in use_cases:
