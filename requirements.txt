@@ -98,6 +98,7 @@ python-json-logger==2.0.7
 pytz==2024.1
 PyYAML==6.0.1
 pyzmq==25.1.2
+uvicorn==0.29.0
 pywin32==306; platform_system == "Windows"
 pywinpty==2.0.13; platform_system == "Windows"
 referencing==0.33.0
