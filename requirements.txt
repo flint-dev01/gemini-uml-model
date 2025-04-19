@@ -96,9 +96,10 @@ pyparsing==3.1.2
 python-dateutil==2.9.0.post0
 python-json-logger==2.0.7
 pytz==2024.1
-pywinpty==2.0.13
 PyYAML==6.0.1
 pyzmq==25.1.2
+pywin32==306; platform_system == "Windows"
+pywinpty==2.0.13; platform_system == "Windows"
 referencing==0.33.0
 regex==2024.9.11
 requests==2.31.0
