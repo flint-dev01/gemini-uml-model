@@ -134,3 +134,5 @@ websocket-client==1.7.0
 aiofiles
 langchain-core
 langchain_groq
+dotenv
+plantuml
