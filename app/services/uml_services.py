@@ -41,7 +41,7 @@ def extract_plantuml_code(text: str):
 
 
 async def CreateUseCase(text: UsecaseCreate):
-    chat1, chat2 = InitializeModel()
+    chat1, chat2 ,chat3 = InitializeModel()
     plantuml_web_server =  InitializePlantUmlServer()
     human = usecase_human(text.srs_text)
     usecase_prompt = ChatPromptTemplate.from_messages([("system", usecase_system), ("human", human)])
@@ -139,12 +139,12 @@ async def process_activity(actor, chat, plantuml_web_server, data):
         return None
 
 async def CreateSequence(data):
-    chat1, chat2 = InitializeModel()
+    chat1, chat2 , chat3 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
 
     tasks = []
     for idx, use_case in enumerate(data.use_cases):
-        chat = chat1 if idx % 2 == 0 else chat2 
+        chat = chat3 if idx % 2 == 0 else chat2 
         tasks.append(process_seuence(use_case, chat, plantuml_web_server, data))
 
     # Run all tasks concurrently
@@ -157,7 +157,7 @@ async def CreateSequence(data):
 
 
 async def CreateActivity(data: ActivityCreate):
-    chat1, chat2 = InitializeModel()
+    chat1, chat2, chat3 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
     activity_image_data = [] 
     tasks = []
