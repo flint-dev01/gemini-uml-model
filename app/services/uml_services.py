@@ -41,12 +41,18 @@ def extract_plantuml_code(text: str):
 
 
 async def CreateUseCase(text: UsecaseCreate):
-    chat1, chat2 ,chat3 = InitializeModel()
+    chat1 = InitializeModel()
     plantuml_web_server =  InitializePlantUmlServer()
     human = usecase_human(text.srs_text)
     usecase_prompt = ChatPromptTemplate.from_messages([("system", usecase_system), ("human", human)])
-    usecase_chain = usecase_prompt | chat1    
-    usecase_result = await asyncio.to_thread(usecase_chain.invoke, {}) 
+    # usecase_chain = usecase_prompt | chat1 
+    response = chat1.models.generate_content(
+        model="gemini-2.0-flash",  # Specify the Gemini model you want to use
+        contents=usecase_prompt,  # Content that you want to generate
+    )   
+    usecase_result = response.text
+    print(usecase_result)
+    # usecase_result = await asyncio.to_thread(usecase_chain.invoke, {}) 
     structured_text = extract_plantuml_code(usecase_result.content)
     if not structured_text:
         return Response(content="Failed to extract PlantUML code", media_type="text/plain")
@@ -88,10 +94,12 @@ async def process_seuence(use_case, chat, plantuml_web_server, data):
         human_msg = sequence_human(use_case, data.srs_text, data.usecase_code)
         sequence_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
 
-        # Invoke chat asynchronously
-        sequence_chain = sequence_prompt | chat
-        sequence_result = await sequence_chain.ainvoke({})  # Ensure awaiting the coroutine
-        
+        response = chat.models.generate_content(
+            model="gemini-2.0-flash",  # Specify the Gemini model you want to use
+            contents=sequence_prompt,  # Content that you want to generate
+        )   
+        sequence_result = response.text
+        print(sequence_result)
         seq_code = extract_plantuml_code(sequence_result.content)
 
         # Validate and process UML code
@@ -120,8 +128,12 @@ async def process_activity(actor, chat, plantuml_web_server, data):
         activity_prompt = ChatPromptTemplate.from_messages([("system", system_msg), ("human", human_msg)])
 
         # Invoke chat1
-        activity_chain = activity_prompt | chat
-        activity_result = await activity_chain.ainvoke({})
+        response = chat.models.generate_content(
+            model="gemini-2.0-flash",  # Specify the Gemini model you want to use
+            contents=activity_prompt,  # Content that you want to generate
+        )   
+        activity_result = response.text
+        print(activity_result)
         act_code = extract_plantuml_code(activity_result.content)
         # Validate and process UML code
         if not act_code.strip().startswith("@startuml") or not act_code.strip().endswith("@enduml"):
@@ -139,12 +151,12 @@ async def process_activity(actor, chat, plantuml_web_server, data):
         return None
 
 async def CreateSequence(data):
-    chat1, chat2 , chat3 = InitializeModel()
+    chat1 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
 
     tasks = []
     for idx, use_case in enumerate(data.use_cases):
-        chat = chat3 if idx % 2 == 0 else chat2 
+        chat = chat1 
         tasks.append(process_seuence(use_case, chat, plantuml_web_server, data))
 
     # Run all tasks concurrently
@@ -157,12 +169,12 @@ async def CreateSequence(data):
 
 
 async def CreateActivity(data: ActivityCreate):
-    chat1, chat2, chat3 = InitializeModel()
+    chat1 = InitializeModel()
     plantuml_web_server = InitializePlantUmlServer()
     activity_image_data = [] 
     tasks = []
     for idx, actor in enumerate(data.actors):
-        chat = chat1 if idx % 2 == 0 else chat2 
+        chat = chat1
         tasks.append(process_activity(actor, chat, plantuml_web_server, data))
     results = await asyncio.gather(*tasks)
 
