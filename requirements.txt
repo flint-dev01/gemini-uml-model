@@ -135,4 +135,5 @@ aiofiles
 langchain-core
 langchain_groq
 dotenv
+google
 plantuml
